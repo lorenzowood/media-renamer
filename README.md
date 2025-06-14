@@ -195,12 +195,9 @@ This tool is designed to work with:
 4. Run the test suite
 5. Submit a pull request
 
-## Licence
-
-[Add your chosen licence here]
 
 ## Acknowledgements
 
 - **The Movie Database (TMDB)** for providing the comprehensive movie API
 - **Plex** for inspiring the naming format standards
-- Originally designed to complement a browser extension for enhanced IMDB search results
+- Originally designed to complement a browser extension for enhanced IMDB search results https://github.com/lorenzowood/plex_name_formatter_extension
