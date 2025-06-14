@@ -1,0 +1,50 @@
+#!/bin/bash
+
+# Script to replicate directory structure with empty files
+# Usage: replace-structure <source_dir> <target_dir>
+
+if [ $# -ne 2 ]; then
+    echo "Usage: $0 <source_directory> <target_directory>"
+    echo "Example: $0 /Volumes/Movies/downloads ./tests"
+    exit 1
+fi
+
+SOURCE_DIR="$1"
+TARGET_DIR="$2"
+
+# Check if source directory exists
+if [ ! -d "$SOURCE_DIR" ]; then
+    echo "Error: Source directory '$SOURCE_DIR' does not exist"
+    exit 1
+fi
+
+# Create target directory if it doesn't exist
+mkdir -p "$TARGET_DIR"
+
+echo "Replicating structure from '$SOURCE_DIR' to '$TARGET_DIR'..."
+
+# Find all directories in source and create them in target
+find "$SOURCE_DIR" -type d | while read -r dir; do
+    # Calculate relative path
+    rel_path="${dir#$SOURCE_DIR}"
+    rel_path="${rel_path#/}"  # Remove leading slash if present
+    
+    if [ -n "$rel_path" ]; then
+        target_path="$TARGET_DIR/$rel_path"
+        mkdir -p "$target_path"
+        echo "Created directory: $target_path"
+    fi
+done
+
+# Find all files in source and touch them in target
+find "$SOURCE_DIR" -type f | while read -r file; do
+    # Calculate relative path
+    rel_path="${file#$SOURCE_DIR}"
+    rel_path="${rel_path#/}"  # Remove leading slash if present
+    
+    target_path="$TARGET_DIR/$rel_path"
+    touch "$target_path"
+    echo "Created file: $target_path"
+done
+
+echo "Structure replication complete!"
