@@ -67,13 +67,22 @@ class MediaRenamer:
         return s
 
     def parse_folder_name(self, folder_name):
-        # Normalise underscore word separators
-        folder_name = folder_name.replace('_', ' ')
+        # Normalise common word separators (underscores, dots) to spaces
+        folder_name = folder_name.replace('_', ' ').replace('.', ' ')
+        folder_name = re.sub(r' +', ' ', folder_name).strip()
 
         # First (YYYY) group is the year; everything before it is the title.
-        # This handles torrent names like "Aniara (2019) (1080p BluRay x265) [UTR]"
-        # as well as clean names like "Beverly Hills Cop Axel F (2024)".
+        # Handles "Aniara (2019) (1080p BluRay x265) [UTR]" and "Film (2024)".
         year_match = re.search(r'\((\d{4})\)', folder_name)
+        if year_match:
+            year = year_match.group(1)
+            title = folder_name[:year_match.start()].strip()
+            return title, year
+
+        # Bare year (19xx or 20xx) without parentheses, e.g. dot-separated
+        # torrent names like "Advantageous 2015 1080p WEBRip x264-RARBG".
+        # Restricted to 19xx/20xx so "1080" and similar numbers are ignored.
+        year_match = re.search(r'\b((?:19|20)\d{2})\b', folder_name)
         if year_match:
             year = year_match.group(1)
             title = folder_name[:year_match.start()].strip()
@@ -275,8 +284,13 @@ def main():
     renamer = MediaRenamer()
 
     for pattern in args.patterns:
-        folders = glob.glob(pattern)
-        folders = [f for f in folders if os.path.isdir(f)]
+        # If the shell already expanded a glob and passed a literal directory
+        # name, glob.glob() would misinterpret brackets like [UTR] as character
+        # class patterns and fail to match. Check for a literal path first.
+        if os.path.isdir(pattern):
+            folders = [pattern]
+        else:
+            folders = [f for f in glob.glob(pattern) if os.path.isdir(f)]
 
         if not folders:
             print(f"No directories found matching pattern: {pattern}")

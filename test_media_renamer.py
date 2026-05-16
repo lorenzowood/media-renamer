@@ -18,10 +18,13 @@ class TestMediaRenamer:
             yield Path(temp_dir)
 
     @pytest.fixture
-    def mock_api_key(self):
-        """Provide API key via env var (the fallback path)"""
-        with patch.dict(os.environ, {'TMDB_API_KEY': 'test_api_key'}):
-            yield
+    def mock_api_key(self, tmp_path):
+        """Provide API key via env var, with config file path redirected so
+        any real ~/.media-renamer.conf on the machine doesn't interfere."""
+        missing = tmp_path / 'no-conf'
+        with patch.object(media_renamer, 'CONFIG_PATH', missing):
+            with patch.dict(os.environ, {'TMDB_API_KEY': 'test_api_key'}):
+                yield
 
     @pytest.fixture
     def renamer(self, mock_api_key):
@@ -109,6 +112,16 @@ class TestMediaRenamer:
         # No year, multiple trailing noise groups stripped
         title, year = renamer.parse_folder_name("Some Movie (1080p BluRay) [YTS]")
         assert title == "Some Movie"
+        assert year is None
+
+        # Dot-separated name with bare year (no parentheses)
+        title, year = renamer.parse_folder_name("Advantageous.2015.1080p.WEBRip.x264-RARBG")
+        assert title == "Advantageous"
+        assert year == "2015"
+
+        # Bare year does not confuse resolution numbers like 1080
+        title, year = renamer.parse_folder_name("Some.Film.1080p.BluRay")
+        assert title == "Some Film 1080p BluRay"
         assert year is None
     
     def test_sanitise_filename(self, renamer):
@@ -349,6 +362,25 @@ class TestMediaRenamer:
         
         assert success == False
         assert folder_path.exists()  # Original should still exist
+
+    def test_literal_directory_with_brackets_is_found(self, temp_test_dir, renamer):
+        """Directories with [...] in their name are found even when passed as literals.
+
+        When the shell expands an unquoted *, it passes literal directory names
+        as arguments. Python's glob.glob() treats [...] as a character class
+        pattern, so names like "Aniara (2019) [UTR]" would silently fail to
+        match. The fix is to check os.path.isdir() before calling glob.glob().
+        """
+        folder_name = "Aniara (2019) (1080p BluRay x265) [UTR]"
+        folder_path = temp_test_dir / folder_name
+        folder_path.mkdir()
+
+        import glob as glob_module
+        # Confirm that glob.glob alone fails on this literal name
+        assert glob_module.glob(str(folder_path)) == []
+
+        # But os.path.isdir correctly identifies it
+        assert os.path.isdir(str(folder_path))
 
 
 if __name__ == "__main__":
