@@ -5,32 +5,9 @@ from pathlib import Path
 from unittest.mock import patch, MagicMock
 import sys
 
-# Add the current directory to the path so we can import the media renamer
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-# Since the script is named 'media-renamer' without .py extension, we need to import it differently
-import importlib.util
-import importlib.machinery
-
-# Load the media-renamer script as a module
-script_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "media-renamer")
-
-# Check if file exists
-if not os.path.exists(script_path):
-    raise ImportError(f"Script not found at {script_path}")
-
-# Read the file and execute it as a module
-with open(script_path, 'r') as f:
-    script_content = f.read()
-
-# Create a module object
-media_renamer = type(sys)('media_renamer')
-
-# Execute the script content in the module's namespace
-exec(script_content, media_renamer.__dict__)
-
-# Add to sys.modules so it can be imported normally
-sys.modules['media_renamer'] = media_renamer
+import media_renamer
 
 class TestMediaRenamer:
     

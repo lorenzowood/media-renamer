@@ -39,6 +39,20 @@ Beverly Hills Cop -- Axel F (2024) {imdb-tt3083016}/
 
 ## Installation
 
+### Via pipx (recommended)
+
+```bash
+pipx install media-renamer
+```
+
+Then set your TMDB API key in your shell profile (e.g. `~/.zshrc` or `~/.bash_profile`):
+
+```bash
+export TMDB_API_KEY=your_api_key_here
+```
+
+### From source
+
 1. **Clone the repository:**
    ```bash
    git clone <repository-url>
