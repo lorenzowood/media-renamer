@@ -9,24 +9,62 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import media_renamer
 
+
 class TestMediaRenamer:
-    
+
     @pytest.fixture
     def temp_test_dir(self):
-        """Create a temporary directory for testing"""
         with tempfile.TemporaryDirectory() as temp_dir:
             yield Path(temp_dir)
-    
+
     @pytest.fixture
     def mock_api_key(self):
-        """Mock the API key environment variable"""
+        """Provide API key via env var (the fallback path)"""
         with patch.dict(os.environ, {'TMDB_API_KEY': 'test_api_key'}):
             yield
-    
+
     @pytest.fixture
     def renamer(self, mock_api_key):
-        """Create a MediaRenamer instance with mocked API key"""
         return media_renamer.MediaRenamer()
+
+    def test_load_api_key_from_config(self, tmp_path):
+        conf = tmp_path / '.media-renamer.conf'
+        conf.write_text('[media-renamer]\ntmdb_api_key = conf_key\n')
+        with patch.object(media_renamer, 'CONFIG_PATH', conf):
+            assert media_renamer.load_api_key() == 'conf_key'
+
+    def test_load_api_key_falls_back_to_env(self, tmp_path):
+        missing = tmp_path / 'no-conf'
+        with patch.object(media_renamer, 'CONFIG_PATH', missing):
+            with patch.dict(os.environ, {'TMDB_API_KEY': 'env_key'}):
+                assert media_renamer.load_api_key() == 'env_key'
+
+    def test_load_api_key_config_takes_priority_over_env(self, tmp_path):
+        conf = tmp_path / '.media-renamer.conf'
+        conf.write_text('[media-renamer]\ntmdb_api_key = conf_key\n')
+        with patch.object(media_renamer, 'CONFIG_PATH', conf):
+            with patch.dict(os.environ, {'TMDB_API_KEY': 'env_key'}):
+                assert media_renamer.load_api_key() == 'conf_key'
+
+    def test_set_api_key_writes_config(self, tmp_path):
+        conf = tmp_path / '.media-renamer.conf'
+        with patch.object(media_renamer, 'CONFIG_PATH', conf):
+            media_renamer.set_api_key('new_key')
+        import configparser
+        config = configparser.ConfigParser()
+        config.read(conf)
+        assert config.get('media-renamer', 'tmdb_api_key') == 'new_key'
+
+    def test_set_api_key_preserves_existing_config(self, tmp_path):
+        conf = tmp_path / '.media-renamer.conf'
+        conf.write_text('[media-renamer]\nother_setting = value\n')
+        with patch.object(media_renamer, 'CONFIG_PATH', conf):
+            media_renamer.set_api_key('new_key')
+        import configparser
+        config = configparser.ConfigParser()
+        config.read(conf)
+        assert config.get('media-renamer', 'other_setting') == 'value'
+        assert config.get('media-renamer', 'tmdb_api_key') == 'new_key'
     
     def create_test_structure(self, base_dir, folder_name, files):
         """Create a test directory structure"""

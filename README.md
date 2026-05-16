@@ -45,11 +45,13 @@ Beverly Hills Cop -- Axel F (2024) {imdb-tt3083016}/
 pipx install media-renamer
 ```
 
-Then set your TMDB API key in your shell profile (e.g. `~/.zshrc` or `~/.bash_profile`):
+Then save your TMDB API key:
 
 ```bash
-export TMDB_API_KEY=your_api_key_here
+media-renamer --set-api-key your_api_key_here
 ```
+
+This writes the key to `~/.media-renamer.conf` and you're ready to go. As a fallback, the `TMDB_API_KEY` environment variable is also accepted.
 
 ### From source
 
@@ -82,12 +84,11 @@ export TMDB_API_KEY=your_api_key_here
 
 1. Create a free account at [The Movie Database](https://www.themoviedb.org/signup)
 2. Go to [API Settings](https://www.themoviedb.org/settings/api) and request an API key
-3. Create a `.env` file in the project directory:
+3. Save it:
+   ```bash
+   media-renamer --set-api-key your_api_key_here
    ```
-   TMDB_API_KEY=your_api_key_here
-   ```
-
-The `.gitignore` file is already configured to keep your API key secure.
+   This writes the key to `~/.media-renamer.conf`.
 
 ## Usage
 

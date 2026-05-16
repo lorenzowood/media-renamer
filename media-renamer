@@ -4,31 +4,53 @@ Media file renamer with TMDB integration
 Renames movie folders and files with IMDB-style formatting
 """
 
+import argparse
+import configparser
 import os
 import sys
 import glob
 import re
 import requests
 from pathlib import Path
-from dotenv import load_dotenv
 
-# Load environment variables
-load_dotenv()
+CONFIG_PATH = Path.home() / '.media-renamer.conf'
+_CONFIG_SECTION = 'media-renamer'
+
+
+def load_api_key():
+    if CONFIG_PATH.exists():
+        config = configparser.ConfigParser()
+        config.read(CONFIG_PATH)
+        key = config.get(_CONFIG_SECTION, 'tmdb_api_key', fallback=None)
+        if key:
+            return key
+    return os.environ.get('TMDB_API_KEY')
+
+
+def set_api_key(key):
+    config = configparser.ConfigParser()
+    if CONFIG_PATH.exists():
+        config.read(CONFIG_PATH)
+    if _CONFIG_SECTION not in config:
+        config[_CONFIG_SECTION] = {}
+    config[_CONFIG_SECTION]['tmdb_api_key'] = key
+    with open(CONFIG_PATH, 'w') as f:
+        config.write(f)
+    print(f"API key saved to {CONFIG_PATH}")
+
 
 class MediaRenamer:
     def __init__(self):
-        self.api_key = os.getenv('TMDB_API_KEY')
+        self.api_key = load_api_key()
         if not self.api_key:
-            print("Error: TMDB_API_KEY not found in .env file")
+            print("Error: TMDB API key not configured.")
+            print("Run: media-renamer --set-api-key <your_key>")
+            print("Get a free key at: https://www.themoviedb.org/settings/api")
             sys.exit(1)
-        
+
         self.base_url = "https://api.themoviedb.org/3"
-    
+
     def sanitise_filename(self, s):
-        """
-        Replace risky characters with sensible substitutions
-        Based on the browser plugin logic
-        """
         replacements = {
             '<': '(',
             '>': ')',
@@ -40,16 +62,11 @@ class MediaRenamer:
             '?': '!',
             '*': 'x'
         }
-        
         for char, replacement in replacements.items():
             s = s.replace(char, replacement)
         return s
-    
+
     def parse_folder_name(self, folder_name):
-        """
-        Extract title and year from folder name
-        Returns (title, year) or (title, None)
-        """
         # Normalise underscore word separators
         folder_name = folder_name.replace('_', ' ')
 
@@ -96,39 +113,27 @@ class MediaRenamer:
         except requests.RequestException as e:
             print(f"Error searching TMDB: {e}")
             return []
-    
+
     def format_movie_name(self, movie_data):
-        """
-        Format movie name in the style of the browser plugin
-        """
         title = movie_data.get('title', '')
         release_date = movie_data.get('release_date', '')
         imdb_id = movie_data.get('imdb_id')
-        
-        # Extract year from release date
-        year = None
-        if release_date:
-            year = release_date[:4]
-        
-        # Format title
+
+        year = release_date[:4] if release_date else None
         formatted_title = self.sanitise_filename(title)
-        
-        # Build the final string
+
         result = formatted_title
         if year:
             result += f" ({year})"
         if imdb_id:
             result += f" {{imdb-{imdb_id}}}"
-        
+
         return result
-    
+
     def get_movie_details(self, movie_id):
-        """
-        Get detailed movie information including IMDB ID
-        """
         url = f"{self.base_url}/movie/{movie_id}"
         params = {'api_key': self.api_key}
-        
+
         try:
             response = requests.get(url, params=params)
             response.raise_for_status()
@@ -136,14 +141,11 @@ class MediaRenamer:
         except requests.RequestException as e:
             print(f"Error getting movie details: {e}")
             return None
-    
+
     def get_movie_credits(self, movie_id):
-        """
-        Get movie cast information
-        """
         url = f"{self.base_url}/movie/{movie_id}/credits"
         params = {'api_key': self.api_key}
-        
+
         try:
             response = requests.get(url, params=params)
             response.raise_for_status()
@@ -151,53 +153,41 @@ class MediaRenamer:
         except requests.RequestException as e:
             print(f"Error getting movie credits: {e}")
             return None
-    
+
     def display_search_results(self, folder_name, results):
-        """
-        Display search results and get user choice
-        Returns: selected movie data, custom string, or None to skip
-        """
         if not results:
             print(f"No results found for '{folder_name}'")
             return None
-        
+
         print(f"Looking up {folder_name}...")
-        
-        # Get detailed info for top results (limit to 3)
+
         detailed_results = []
-        for i, movie in enumerate(results[:3]):
+        for movie in results[:3]:
             details = self.get_movie_details(movie['id'])
             if details:
                 credits = self.get_movie_credits(movie['id'])
                 cast_names = []
                 if credits and 'cast' in credits:
                     cast_names = [actor['name'] for actor in credits['cast'][:3]]
-                
+
                 detailed_results.append({
                     'movie': details,
                     'cast': cast_names,
                     'formatted_name': self.format_movie_name(details)
                 })
-        
-        # Display options
+
         for i, result in enumerate(detailed_results, 1):
             movie = result['movie']
-            cast = result['cast']
-            formatted = result['formatted_name']
-            
-            cast_str = ', '.join(cast) if cast else 'Cast info unavailable'
-            release_year = movie.get('release_date', '')[:4] if movie.get('release_date') else 'Unknown'
-            
-            print(f"{i}) {formatted} ({movie.get('title', 'Unknown')}; {release_year}; {cast_str})")
-        
-        # Get user choice
+            cast_str = ', '.join(result['cast']) if result['cast'] else 'Cast info unavailable'
+            release_year = movie.get('release_date', '')[:4] or 'Unknown'
+            print(f"{i}) {result['formatted_name']} ({movie.get('title', 'Unknown')}; {release_year}; {cast_str})")
+
         while True:
             choice = input(f"Choose 1-{len(detailed_results)}, or enter a new rename string, or nothing to skip:\n> ").strip()
-            
-            if not choice:  # Skip
+
+            if not choice:
                 return None
-            
-            # Check if it's a number selection
+
             try:
                 choice_num = int(choice)
                 if 1 <= choice_num <= len(detailed_results):
@@ -206,63 +196,47 @@ class MediaRenamer:
                     print(f"Please choose a number between 1 and {len(detailed_results)}")
                     continue
             except ValueError:
-                # It's a custom string
                 return choice
-    
+
     def rename_folder_and_files(self, old_folder_path, new_name):
-        """
-        Rename folder and all files within it
-        """
         old_folder_path = Path(old_folder_path)
         parent_dir = old_folder_path.parent
         new_folder_path = parent_dir / new_name
-        
+
         if new_folder_path.exists():
             print(f"Error: Target folder '{new_folder_path}' already exists")
             return False
-        
+
         try:
-            # First, rename all files within the folder
             old_folder_name = old_folder_path.name
-            
+
             for file_path in old_folder_path.iterdir():
                 if file_path.is_file():
-                    # Extract the part after the original folder name
                     file_name = file_path.name
                     if file_name.startswith(old_folder_name):
-                        # Replace the folder name part with the new name
                         suffix = file_name[len(old_folder_name):]
                         new_file_name = new_name + suffix
                     else:
-                        # If file doesn't start with folder name, keep as is
                         new_file_name = file_name
-                    
+
                     new_file_path = file_path.parent / new_file_name
                     file_path.rename(new_file_path)
                     print(f"  Renamed file: {file_name} → {new_file_name}")
-            
-            # Then rename the folder itself
+
             old_folder_path.rename(new_folder_path)
             print(f"Renamed folder: {old_folder_path.name} → {new_name}")
             return True
-            
+
         except OSError as e:
             print(f"Error renaming: {e}")
             return False
-    
+
     def process_folder(self, folder_path):
-        """
-        Process a single folder: search, get user choice, rename
-        """
         folder_name = Path(folder_path).name
         title, year = self.parse_folder_name(folder_name)
-        
-        # Search TMDB
         results = self.search_tmdb(title, year)
-        
-        # Get user choice
         choice = self.display_search_results(folder_name, results)
-        
+
         if choice:
             print(f"Renaming to {choice}")
             if self.rename_folder_and_files(folder_path, choice):
@@ -272,25 +246,45 @@ class MediaRenamer:
         else:
             print("Skipped\n")
 
+
 def main():
-    if len(sys.argv) < 2:
-        print("Usage: python media-renamer <folder_pattern>")
-        print("Example: python media-renamer '*'")
+    parser = argparse.ArgumentParser(
+        description='Rename movie folders and files using TMDB metadata.'
+    )
+    parser.add_argument(
+        '--set-api-key',
+        metavar='KEY',
+        help=f'Save your TMDB API key to {CONFIG_PATH}'
+    )
+    parser.add_argument(
+        'patterns',
+        nargs='*',
+        metavar='pattern',
+        help='Folder name patterns to process (e.g. "*" or "Film*")'
+    )
+    args = parser.parse_args()
+
+    if args.set_api_key:
+        set_api_key(args.set_api_key)
+        return
+
+    if not args.patterns:
+        parser.print_help()
         sys.exit(1)
-    
+
     renamer = MediaRenamer()
-    
-    # Process folder patterns
-    for pattern in sys.argv[1:]:
+
+    for pattern in args.patterns:
         folders = glob.glob(pattern)
-        folders = [f for f in folders if os.path.isdir(f)]  # Only directories
-        
+        folders = [f for f in folders if os.path.isdir(f)]
+
         if not folders:
             print(f"No directories found matching pattern: {pattern}")
             continue
-            
+
         for folder in folders:
             renamer.process_folder(folder)
-                
+
+
 if __name__ == "__main__":
     main()
