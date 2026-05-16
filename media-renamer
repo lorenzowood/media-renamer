@@ -50,32 +50,49 @@ class MediaRenamer:
         Extract title and year from folder name
         Returns (title, year) or (title, None)
         """
-        # Look for year in parentheses at the end
-        year_match = re.search(r'\((\d{4})\)$', folder_name)
+        # Normalise underscore word separators
+        folder_name = folder_name.replace('_', ' ')
+
+        # First (YYYY) group is the year; everything before it is the title.
+        # This handles torrent names like "Aniara (2019) (1080p BluRay x265) [UTR]"
+        # as well as clean names like "Beverly Hills Cop Axel F (2024)".
+        year_match = re.search(r'\((\d{4})\)', folder_name)
         if year_match:
             year = year_match.group(1)
             title = folder_name[:year_match.start()].strip()
             return title, year
-        else:
-            return folder_name, None
-    
+
+        # No year found — strip trailing noise groups like [...] and (...) then
+        # use whatever remains as the title.
+        cleaned = re.sub(r'(\s*[\[(][^\]\[()]*[\])])+\s*$', '', folder_name).strip()
+        return cleaned if cleaned else folder_name, None
+
     def search_tmdb(self, title, year=None):
         """
-        Search TMDB for movies matching title and year
-        Returns list of results
+        Search TMDB for movies matching title and year.
+        Year is used as a soft ranking signal, not a hard API filter, so
+        off-by-one years and label errors don't discard correct results.
         """
         url = f"{self.base_url}/search/movie"
         params = {
             'api_key': self.api_key,
             'query': title
         }
-        if year:
-            params['year'] = year
-        
+
         try:
             response = requests.get(url, params=params)
             response.raise_for_status()
-            return response.json().get('results', [])
+            results = response.json().get('results', [])
+
+            if year:
+                def year_proximity(movie):
+                    movie_year = movie.get('release_date', '')[:4]
+                    if not movie_year.isdigit():
+                        return 999
+                    return abs(int(movie_year) - int(year))
+                results.sort(key=year_proximity)
+
+            return results
         except requests.RequestException as e:
             print(f"Error searching TMDB: {e}")
             return []

@@ -64,19 +64,36 @@ class TestMediaRenamer:
     
     def test_parse_folder_name(self, renamer):
         """Test folder name parsing"""
-        # Test with year
+        # Clean name with year at end
         title, year = renamer.parse_folder_name("Beverly Hills Cop Axel F (2024)")
         assert title == "Beverly Hills Cop Axel F"
         assert year == "2024"
-        
-        # Test without year
+
+        # No year, no noise
         title, year = renamer.parse_folder_name("Some Movie")
         assert title == "Some Movie"
         assert year is None
-        
-        # Test with year in middle (should not match)
-        title, year = renamer.parse_folder_name("Movie (2024) Extended")
-        assert title == "Movie (2024) Extended"
+
+        # Year followed by torrent quality/group noise
+        title, year = renamer.parse_folder_name(
+            "Aniara (2019) (1080p BluRay x265 HEVC 10bit DTS 5.1 Qman) [UTR]"
+        )
+        assert title == "Aniara"
+        assert year == "2019"
+
+        # Underscores as word separators
+        title, year = renamer.parse_folder_name("The_Dark_Knight_(2008)")
+        assert title == "The Dark Knight"
+        assert year == "2008"
+
+        # No year, trailing group tag stripped
+        title, year = renamer.parse_folder_name("Some Movie [YTS]")
+        assert title == "Some Movie"
+        assert year is None
+
+        # No year, multiple trailing noise groups stripped
+        title, year = renamer.parse_folder_name("Some Movie (1080p BluRay) [YTS]")
+        assert title == "Some Movie"
         assert year is None
     
     def test_sanitise_filename(self, renamer):
@@ -121,8 +138,7 @@ class TestMediaRenamer:
     
     @patch('requests.get')
     def test_search_tmdb(self, mock_get, renamer):
-        """Test TMDB search functionality"""
-        # Mock successful response
+        """Test TMDB search: year is not sent as an API filter"""
         mock_response = MagicMock()
         mock_response.raise_for_status.return_value = None
         mock_response.json.return_value = {
@@ -131,24 +147,40 @@ class TestMediaRenamer:
             ]
         }
         mock_get.return_value = mock_response
-        
+
         results = renamer.search_tmdb("Test Movie", "2024")
-        
+
         assert len(results) == 1
         assert results[0]['title'] == 'Test Movie'
-        
-        # Verify the API was called correctly
+
         mock_get.assert_called_once()
         call_args = mock_get.call_args
-        
-        # Check the URL
         assert call_args[0][0] == 'https://api.themoviedb.org/3/search/movie'
-        
-        # Check the parameters
+
         params = call_args[1]['params']
         assert params['query'] == 'Test Movie'
-        assert params['year'] == '2024'
         assert params['api_key'] == 'test_api_key'
+        assert 'year' not in params
+
+    @patch('requests.get')
+    def test_search_tmdb_year_proximity_sorting(self, mock_get, renamer):
+        """Results are sorted by closeness to the supplied year"""
+        mock_response = MagicMock()
+        mock_response.raise_for_status.return_value = None
+        mock_response.json.return_value = {
+            'results': [
+                {'id': 1, 'title': 'Aniara', 'release_date': '2017-01-01'},  # off by 2
+                {'id': 2, 'title': 'Aniara', 'release_date': '2020-01-01'},  # off by 1
+                {'id': 3, 'title': 'Aniara', 'release_date': '2019-01-01'},  # exact
+            ]
+        }
+        mock_get.return_value = mock_response
+
+        results = renamer.search_tmdb("Aniara", "2019")
+
+        assert results[0]['release_date'][:4] == '2019'  # exact match first
+        assert results[1]['release_date'][:4] == '2020'  # off by 1
+        assert results[2]['release_date'][:4] == '2017'  # off by 2
     
     @patch('requests.get')
     def test_get_movie_details(self, mock_get, renamer):

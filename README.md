@@ -29,6 +29,8 @@ Beverly Hills Cop -- Axel F (2024) {imdb-tt3083016}/
 ## Features
 
 - **Interactive search**: Presents multiple options from TMDB with cast information
+- **Fuzzy folder name parsing**: Handles torrent-style names with quality/codec tags and group identifiers (e.g. `Aniara (2019) (1080p BluRay x265 HEVC 10bit DTS 5.1 Qman) [UTR]`)
+- **Tolerant year matching**: Year is used as a soft ranking signal rather than a hard filter — results for the right film ranked by year proximity, so an off-by-one label won't discard correct matches
 - **Intelligent filename sanitisation**: Replaces problematic characters (`:` becomes ` --`, `/` becomes ` or`, etc.)
 - **Comprehensive renaming**: Renames both folders and all files within them
 - **Flexible input**: Accepts custom rename strings or skips items entirely
@@ -93,12 +95,25 @@ The `.gitignore` file is already configured to keep your API key secure.
 ./media-renamer "Beverly Hills Cop*" "Bridget Jones*"
 ```
 
+### Supported folder name formats
+
+The tool handles a range of naming conventions:
+
+| Format | Example |
+|--------|---------|
+| Clean with year | `Beverly Hills Cop Axel F (2024)` |
+| Torrent with quality/group tags | `Aniara (2019) (1080p BluRay x265 HEVC 10bit DTS 5.1 Qman) [UTR]` |
+| Underscore separators | `The_Dark_Knight_(2008)` |
+| No year | `Some Movie [YTS]` |
+
+Year mismatches of one or two years are tolerated — the correct film will still appear in the results, ranked by proximity to the folder's year.
+
 ### Interactive process
 
 When you run the tool, it will:
 
-1. Parse each folder name to extract title and year
-2. Search TMDB for matching movies
+1. Parse each folder name to extract title and year (stripping torrent noise)
+2. Search TMDB for matching movies, ranked by year proximity
 3. Present up to 3 options with cast information:
    ```
    Looking up Beverly Hills Cop Axel F (2024)...
