@@ -84,8 +84,9 @@ def get_search_candidates(folder_name, stop_words):
     2. Scan tokens for the first stop word — everything before it is the
        title zone; everything after is technical metadata noise.
     3. Strip trailing [...] release-group tags from the title zone.
-    4. Extract a delimited (YYYY) or [YYYY] year as a definitive signal and
-       remove it from the title zone.
+    4. Extract a year from any (…YYYY…) or […YYYY…] bracket group as a
+       definitive signal and remove the entire group from the title zone.
+       Handles both plain (YYYY) and annotated forms like (War Drama 1956).
     5. Split the title zone on strong delimiters: runs of 2+ spaces or
        spaced dash(es), e.g. "Site    -    Title" → ["Site", "Title"].
     6. For each segment:
@@ -113,9 +114,11 @@ def get_search_candidates(folder_name, stop_words):
     # Strip trailing [...] release-group tags (e.g. [UTR], [YTS])
     title_zone = re.sub(r'(\s*\[[^\]]*\])+\s*$', '', title_zone).strip()
 
-    # Extract a delimited year — definitive, removed from title zone
+    # Extract year from any (...YYYY...) or [...YYYY...] bracket group — definitive.
+    # Matches both plain (YYYY) and annotated forms like (War Drama 1956).
+    # The entire bracket group is removed from the title zone.
     global_year = None
-    dm = re.search(r'[\(\[]((?:19|20)\d{2})[\)\]]', title_zone)
+    dm = re.search(r'[\(\[][^\)\]]*?((?:19|20)\d{2})[^\)\]]*?[\)\]]', title_zone)
     if dm:
         global_year = dm.group(1)
         title_zone = (title_zone[:dm.start()] + title_zone[dm.end():]).strip()

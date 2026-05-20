@@ -174,6 +174,13 @@ class TestMediaRenamer:
         candidates = media_renamer.get_search_candidates("1984", SW)
         assert ("1984", "1984") in candidates
 
+    def test_candidates_genre_year_parenthetical_extracted(self):
+        # "(War Drama 1956)" is a descriptor — year extracted, whole group removed
+        candidates = media_renamer.get_search_candidates(
+            "Reach for the Sky  (War Drama 1956)  Kenneth More  720p", SW
+        )
+        assert candidates[0] == ("Reach for the Sky", "1956")
+
     def test_candidates_before_year_is_first_for_trailing_noise(self):
         # "WS" appears after the year — before-year "Sexy Beast" must be first
         candidates = media_renamer.get_search_candidates(
