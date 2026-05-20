@@ -142,22 +142,22 @@ class TestMediaRenamer:
         assert year == "2013"
 
     def test_candidates_dot_separated_bare_year_as_title_word(self):
-        # First candidate should include the year as a title word
+        # before-year is the cleanest candidate and should come first
         candidates = media_renamer.get_search_candidates(
             "Advantageous.2015.1080p.WEBRip.x264-RARBG", SW
         )
-        assert candidates[0] == ("Advantageous 2015", "2015")
-        # Second candidate should have the year stripped
-        assert candidates[1] == ("Advantageous", "2015")
+        assert candidates[0] == ("Advantageous", "2015")
+        # Full segment (year as title word) follows as a fallback
+        assert candidates[1] == ("Advantageous 2015", "2015")
 
     def test_candidates_url_noise_prefix_deprioritised(self):
         name = "www.UIndex.org    -    The Quiet Earth 1985 1080p AMZN WEB-DL DDP2 0 H 264-GPRS"
         candidates = media_renamer.get_search_candidates(name, SW)
-        # "The Quiet Earth 1985" should be the top candidate; URL segment last
-        assert candidates[0] == ("The Quiet Earth 1985", "1985")
-        assert candidates[1] == ("The Quiet Earth", "1985")
+        # before-year "The Quiet Earth" is the cleanest candidate; URL segment last
+        assert candidates[0] == ("The Quiet Earth", "1985")
+        assert candidates[1] == ("The Quiet Earth 1985", "1985")
         url_titles = [t for t, _ in candidates]
-        assert url_titles.index("www UIndex org") > url_titles.index("The Quiet Earth 1985")
+        assert url_titles.index("www UIndex org") > url_titles.index("The Quiet Earth")
 
     def test_candidates_no_year_trailing_tag_stripped(self):
         title, year = self._first("Some Movie [YTS]")
@@ -173,6 +173,20 @@ class TestMediaRenamer:
         # Film titled "1984" — bare year is both title and year signal
         candidates = media_renamer.get_search_candidates("1984", SW)
         assert ("1984", "1984") in candidates
+
+    def test_candidates_before_year_is_first_for_trailing_noise(self):
+        # "WS" appears after the year — before-year "Sexy Beast" must be first
+        candidates = media_renamer.get_search_candidates(
+            "Sexy.Beast.2000.WS.1080p.BluRay.x265.HEVC.EAC3-SARTRE", SW
+        )
+        assert candidates[0] == ("Sexy Beast", "2000")
+
+    def test_candidates_multi_language_tag_does_not_pollute_title(self):
+        # "Multi" appears after the year — before-year "The Mummy" must be first
+        candidates = media_renamer.get_search_candidates(
+            "The.Mummy.1999.Multi.2160p.BluRay.x265.HDR.DTS-HDMA.7.1.[En+Hi]-DTOne", SW
+        )
+        assert candidates[0] == ("The Mummy", "1999")
 
     def test_candidates_word_drops_appended(self):
         candidates = media_renamer.get_search_candidates("The Quiet Earth 1985", SW)

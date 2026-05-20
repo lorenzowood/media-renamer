@@ -29,7 +29,7 @@ Beverly Hills Cop -- Axel F (2024) {imdb-tt3083016}/
 ## Features
 
 - **Interactive search**: Presents multiple options from TMDB with cast information
-- **Fuzzy folder name parsing**: Handles torrent-style names with quality/codec tags and group identifiers (e.g. `Aniara (2019) (1080p BluRay x265 HEVC 10bit DTS 5.1 Qman) [UTR]`)
+- **Fuzzy folder name parsing**: Handles torrent-style names with quality/codec tags and group identifiers. A multi-candidate pipeline extracts the clean title from before the year token, strips known technical tokens (resolution, codec, audio, release flags such as `WS`, `Multi`, `EAC3`, etc.), and falls back through progressively simpler queries until TMDB returns a match
 - **Tolerant year matching**: Year is used as a soft ranking signal rather than a hard filter — results for the right film ranked by year proximity, so an off-by-one label won't discard correct matches
 - **Intelligent filename sanitisation**: Replaces problematic characters (`:` becomes ` --`, `/` becomes ` or`, etc.)
 - **Comprehensive renaming**: Renames both folders and all files within them
@@ -75,7 +75,7 @@ This writes the key to `~/.media-renamer.conf` and you're ready to go. As a fall
 4. **Make scripts executable:**
    ```bash
    chmod +x media-renamer
-   chmod +x replace-structure
+   chmod +x replicate-structure
    ```
 
 ## Setup
@@ -118,6 +118,8 @@ The tool handles a range of naming conventions:
 |--------|---------|
 | Clean with year | `Beverly Hills Cop Axel F (2024)` |
 | Torrent with quality/group tags | `Aniara (2019) (1080p BluRay x265 HEVC 10bit DTS 5.1 Qman) [UTR]` |
+| Dot-separated with release flags | `Sexy.Beast.2000.WS.1080p.BluRay.x265.HEVC.EAC3-SARTRE` |
+| Multi-language / HDR torrent | `The.Mummy.1999.Multi.2160p.BluRay.x265.HDR.DTS-HDMA.7.1.[En+Hi]-DTOne` |
 | Underscore separators | `The_Dark_Knight_(2008)` |
 | No year | `Some Movie [YTS]` |
 
@@ -166,15 +168,15 @@ The project includes a comprehensive test suite using pytest.
 ### Run tests
 
 ```bash
-python test_media_renamer.py
+pytest
 ```
 
 ### Create test data
 
-Use the included `replace-structure` script to create a test directory structure:
+Use the included `replicate-structure` script to create a test directory structure:
 
 ```bash
-./replace-structure /path/to/your/movies ./test-data
+./replicate-structure /path/to/your/movies ./test-data
 ```
 
 This creates a copy of your directory structure with empty files, perfect for testing without risking your actual media files.
@@ -193,12 +195,12 @@ The test suite covers:
 
 ```
 media-renamer/
-├── media-renamer           # Main script
-├── replace-structure       # Test data generator
+├── media_renamer.py        # Main module
+├── media-renamer           # CLI entry point
+├── replicate-structure     # Test data generator
 ├── test_media_renamer.py   # Test suite
-├── requirements.txt        # Python dependencies
-├── .env                    # API key (create this)
-├── .gitignore             # Git ignore file
+├── requirements.txt        # Dev dependencies (requests, pytest, pytest-mock)
+├── pyproject.toml          # Package configuration
 └── README.md              # This file
 ```
 
@@ -206,9 +208,7 @@ media-renamer/
 
 - Python 3.7+
 - `requests` - For TMDB API calls
-- `python-dotenv` - For environment variable management
-- `pytest` - For running tests
-- `pytest-mock` - For test mocking
+- `pytest` / `pytest-mock` - For running tests
 
 ## Compatibility
 

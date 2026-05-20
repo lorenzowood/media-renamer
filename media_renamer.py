@@ -22,9 +22,10 @@ DEFAULT_STOP_WORDS = [
     'WEBRip', 'WEB-DL', 'WEBDL', 'HDTV', 'DVDRip', 'DVD',
     'AMZN', 'NF', 'HULU', 'DSNP', 'ATVP', 'HBO', 'PCOK',
     'x264', 'x265', 'H264', 'H265', 'HEVC', 'AVC', 'XviD', 'DivX',
-    'DDP', 'DTS', 'AAC', 'AC3', 'FLAC', 'TrueHD', 'Atmos',
+    'DDP', 'DTS', 'AAC', 'AC3', 'EAC3', 'FLAC', 'TrueHD', 'Atmos',
     'HDR', 'HDR10', 'SDR', 'DoVi', 'HLG',
     'REMUX', 'IMAX', 'REPACK', 'PROPER',
+    'WS', 'FS', 'Multi',
 ]
 
 
@@ -129,7 +130,8 @@ def get_search_candidates(folder_name, stop_words):
     url_re = re.compile(r'\bwww\b', re.IGNORECASE)
     bare_year_re = re.compile(r'\b((?:19|20)\d{2})\b')
 
-    scored = []  # (title, year, is_url, word_count)
+    scored = []  # (title, year, is_url, rank, word_count)
+    # rank 0 = before-year (cleanest title), rank 1 = everything else
 
     for seg in segments:
         is_url = bool(url_re.search(seg))
@@ -137,24 +139,28 @@ def get_search_candidates(folder_name, stop_words):
         bm = bare_year_re.search(seg)
 
         if global_year:
-            scored.append((seg, global_year, is_url, wc))
+            scored.append((seg, global_year, is_url, 1, wc))
         elif bm:
             bare_year = bm.group(1)
+            before_year = seg[:bm.start()].strip()
             without_year = (seg[:bm.start()] + seg[bm.end():]).strip()
-            # Full segment first (year as title word), then without year
-            scored.append((seg, bare_year, is_url, wc))
-            if without_year:
-                scored.append((without_year, bare_year, is_url, len(without_year.split())))
+            # before_year is the cleanest candidate — rank 0 (highest priority)
+            if before_year:
+                scored.append((before_year, bare_year, is_url, 0, len(before_year.split())))
+            # Full segment (year as title word) and without-year as rank-1 fallbacks
+            scored.append((seg, bare_year, is_url, 1, wc))
+            if without_year and without_year != before_year:
+                scored.append((without_year, bare_year, is_url, 1, len(without_year.split())))
         else:
-            scored.append((seg, global_year, is_url, wc))
+            scored.append((seg, global_year, is_url, 1, wc))
 
-    # Non-URL first, then longer segments before shorter ones
-    scored.sort(key=lambda x: (x[2], -x[3]))
+    # Non-URL first, then rank (0 before 1), then longer segments before shorter ones
+    scored.sort(key=lambda x: (x[2], x[3], -x[4]))
 
-    result = [(t, y) for t, y, _, _ in scored]
+    result = [(t, y) for t, y, _, _, _ in scored]
 
     # Word-drop fallbacks from the top non-URL candidate
-    top = next(((t, y) for t, y, u, _ in scored if not u), None)
+    top = next(((t, y) for t, y, u, _, _ in scored if not u), None)
     if top:
         words = top[0].split()
         for i in range(1, len(words)):
